@@ -1,0 +1,20 @@
+version: '3'
+
+services:
+  aleks-crawler:
+    build: 
+      context: ./aleks
+    volumes:
+      - ./aleks/data:/app/data
+    environment:
+      - MAX_PAGES=10  # Variável para controlar o número de páginas (opcional)
+    restart: on-failure
+
+  thiago-crawler:
+    build: 
+      context: ./thiago
+    volumes:
+      - ./thiago/data:/app/data
+    environment:
+      - MAX_PAGES=10  # Variável para controlar o número de páginas (opcional)
+    restart: on-failure
