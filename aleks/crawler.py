@@ -12,6 +12,7 @@ from datetime import datetime
 from urllib.parse import urlparse, parse_qs, urljoin
 import cloudscraper
 import backoff
+import re
 
 # Configuração de logging
 logging.basicConfig(
@@ -26,7 +27,7 @@ logging.basicConfig(
 class OlxCrawler:
     def __init__(self):
         # Configurações básicas
-        self.base_url = "https://www.olx.com.br/autos-e-pecas/carros-vans-e-utilitarios"
+        self.base_url = "https://www.olx.com.br/autos-e-pecas/carros-vans-e-utilitarios/estado-mg/belo-horizonte-e-regiao"
         self.data_dir = "data"
         self.html_dir = os.path.join(self.data_dir, "html")
         self.json_file = os.path.join(self.data_dir, "anuncios.json")
@@ -133,7 +134,7 @@ class OlxCrawler:
     )
     def make_request(self, url):
         """Faz uma requisição HTTP com retry exponencial e simulação de comportamento humano."""
-        wait_time = random.uniform(2, 6)
+        wait_time = random.uniform(1, 3)
         logging.info(f"Aguardando {wait_time:.2f}s antes da requisição...")
         time.sleep(wait_time)
         
@@ -258,30 +259,59 @@ class OlxCrawler:
         }
         
         try:
-            # 1. EXTRAIR TÍTULO/MODELO (NOVA IMPLEMENTAÇÃO)
-            # Buscar pelo título na estrutura de descrição do anúncio
-            title_container = soup.select_one('div[data-ds-component="DS-Container"][id="description-title"]')
-            
-            if title_container:
-                # Pegar a primeira div filha
-                first_div_child = title_container.select_one('div')
+            # 1. EXTRAIR TÍTULO/MODELO E MARCA (IMPLEMENTAÇÃO ATUALIZADA)
+            # Buscar dados na seção de detalhes
+            details_section = soup.select_one('div#details')
+            if details_section:
+                logging.info("Seção de detalhes encontrada")
                 
-                if first_div_child:
-                    # Dentro da primeira div filha, pegar o span que contém o título
-                    title_span = first_div_child.select_one('span[data-ds-component="DS-Text"]')
-                    
-                    if title_span:
-                        ad_data['modelo'] = title_span.text.strip()
-                        logging.info(f"Modelo extraído com sucesso: {ad_data['modelo']}")
+                # Extração da marca
+                marca_container = details_section.find(lambda tag: tag.name == 'span' and 'Marca' in tag.text)
+                if marca_container and marca_container.find_next_sibling():
+                    marca_element = marca_container.find_parent('div').find('a', class_='olx-link')
+                    if marca_element:
+                        ad_data['marca'] = marca_element.text.strip()
+                        logging.info(f"Marca encontrada: {ad_data['marca']}")
                     else:
-                        # Tentar pegar qualquer span dentro da primeira div filha
-                        any_span = first_div_child.select_one('span')
-                        if any_span:
-                            ad_data['modelo'] = any_span.text.strip()
-                            logging.info(f"Modelo extraído do span alternativo: {ad_data['modelo']}")
+                        marca_span = marca_container.find_parent('div').find('span', class_='ekhFnR')
+                        if marca_span:
+                            ad_data['marca'] = marca_span.text.strip()
+                            logging.info(f"Marca encontrada (span): {ad_data['marca']}")
+                        else:
+                            ad_data['marca'] = "Marca não encontrada"
+                            logging.warning("Marca não encontrada nos elementos esperados")
+                else:
+                    ad_data['marca'] = "Marca não encontrada"
+                    logging.warning("Container de marca não encontrado")
+                
+                # Extração do modelo
+                modelo_container = details_section.find(lambda tag: tag.name == 'span' and 'Modelo' in tag.text)
+                if modelo_container and modelo_container.find_next_sibling():
+                    modelo_element = modelo_container.find_parent('div').find('a', class_='olx-link')
+                    if modelo_element:
+                        ad_data['modelo'] = modelo_element.text.strip()
+                        logging.info(f"Modelo encontrado: {ad_data['modelo']}")
+                    else:
+                        modelo_span = modelo_container.find_parent('div').find('span', class_='ekhFnR')
+                        if modelo_span:
+                            ad_data['modelo'] = modelo_span.text.strip()
+                            logging.info(f"Modelo encontrado (span): {ad_data['modelo']}")
+                        else:
+                            ad_data['modelo'] = "Modelo não encontrado"
+                            logging.warning("Modelo não encontrado nos elementos esperados")
+                else:
+                    ad_data['modelo'] = "Modelo não encontrado"
+                    logging.warning("Container de modelo não encontrado")
+                    
+                # Método de fallback - tentar extrair do título principal se não encontrou nos detalhes
+                if ad_data.get('modelo') == "Modelo não encontrado":
+                    main_title = soup.select_one('h1.ad__sc-45jt43-0')
+                    if main_title:
+                        ad_data['modelo'] = main_title.text.strip()
+                        logging.info(f"Modelo extraído do título principal: {ad_data['modelo']}")
             else:
-                # Se não encontrou o título em nenhum dos seletores anteriores
-                # Procurar em toda descrição pelo que parece ser um modelo de carro
+                # Fallback para método anterior - procurar em toda descrição
+                logging.warning("Seção de detalhes não encontrada, tentando métodos alternativos")
                 description = soup.select_one('div[data-section="description"] span.olx-text--body-medium')
                 if description:
                     # Pegar a primeira linha que geralmente contém o modelo
@@ -292,47 +322,52 @@ class OlxCrawler:
                 else:
                     ad_data['modelo'] = "Modelo não encontrado"
                     logging.warning("Não foi possível encontrar o modelo do veículo")
-            
-            # 2. EXTRAIR PREÇO FIPE E PREÇO MÉDIO
-            preco_fipe= soup.find_all('PREÇO FIPE'):
-              
-            # Se não encontrou preço FIPE ou preço médio, tentar abordagem alternativa
-     
-            # Buscar pelos itens de detalhes do anúncio
-            details_items = soup.select('div[data-ds-component="DS-AdDetails-item"]')
-            
-            for item in details_items:
-                try:
-                    # Cada item tem um par de spans: o primeiro é o rótulo, o segundo é o valor
-                    label_span = item.select_one('span:first-child')
-                    value_span = item.select_one('span:last-child')
-                    
-                    if label_span and value_span:
-                        label_text = label_span.text.strip().lower()
-                        value_text = value_span.text.strip()
-                        
-                        # Mapeamento para os campos que queremos extrair
-                        field_mapping = {
-                            'marca': 'marca',
-                            'modelo': 'modelo_especifico',
-                            'ano': 'ano',
-                            'quilometragem': 'quilometragem',
-                            'câmbio': 'cambio',
-                            'combustível': 'combustivel',
-                            'cor': 'cor',
-                            'portas': 'portas',
-                            'final de placa': 'final_placa'
-                        }
-                        
-                        field_name = field_mapping.get(label_text)
-                        if field_name:
-                            ad_data[field_name] = value_text
-                            logging.debug(f"Detalhe extraído: {field_name}={value_text}")
-                except Exception as e:
-                    logging.error(f"Erro ao extrair detalhe do item: {e}")
-            
+
+            try:
+                logging.info("Extraindo preço do anúncio...")
+                
+                # Método 1: Buscar pelo preço no container específico
+                price_container = soup.select_one('div#price-box-container')
+                if price_container:
+                    # Buscar especificamente o span com a classe title-medium dentro do container
+                    price_span = price_container.select_one('span.olx-text')
+                    if price_span:
+                        preco_valor = price_span.text.strip()
+                        logging.info(f"Preço encontrado no span dentro do container principal: {preco_valor}")
+                        ad_data['preco'] = preco_valor
+                    else:
+                        # Se não encontrou o span específico, pegar qualquer texto que contenha R$ no container
+                        price_text = re.search(r'R\$\s*[\d.,]+', price_container.text)
+                        if price_text:
+                            preco_valor = price_text.group(0).strip()
+                            logging.info(f"Preço encontrado com regex no container principal: {preco_valor}")
+                            ad_data['preco'] = preco_valor
+                        else:
+                            logging.warning("Preço não encontrado no container principal")
+                            ad_data['preco'] = "Preço não encontrado no container"
+                else:
+                    price_spans = soup.select('span.olx-text--title-medium')
+                    for span in price_spans:
+                        if 'R$' in span.text:
+                            preco_valor = span.text.strip()
+                            logging.info(f"Preço encontrado em span alternativo: {preco_valor}")
+                            ad_data['preco'] = preco_valor
+                            break
+                    else:
+                        # Método 3: Buscar qualquer texto que contenha R$ (como último recurso)
+                        price_element = soup.find(string=re.compile(r'R\$\s*[\d.,]+'))
+                        if price_element:
+                            preco_valor = price_element.strip()
+                            logging.info(f"Preço encontrado com regex: {preco_valor}")
+                            ad_data['preco'] = preco_valor
+                        else:
+                            logging.warning("Preço não encontrado no anúncio")
+                            ad_data['preco'] = "Preço não encontrado"
+            except Exception as e:
+                logging.error(f"Erro ao extrair preço: {e}")
+                ad_data['preco'] = "Erro na extração"
             # 5. VERIFICAR SE ENCONTRAMOS DADOS VÁLIDOS E SALVAR PARA DEBUG SE NECESSÁRIO
-            if ad_data['modelo'] == "Modelo não encontrado" or ad_data['preco'] == "Preço não encontrado":
+            if ad_data['modelo'] == "Modelo não encontrado":
                 # Salvar HTML para debug quando não encontramos preço ou modelo
                 debug_file = os.path.join(self.data_dir, f"debug_extraction_{ad_id}.html")
                 with open(debug_file, 'w', encoding='utf-8') as f:
@@ -589,201 +624,6 @@ class OlxCrawler:
             # Salvar anúncios processados antes de encerrar
             self.save_data()
             logging.info(f"Crawling finalizado. Total de anúncios processados: {total_ads_processed}")
-
-
-def parse_olx_ad_page(html_content):
-    """
-    Extrai dados detalhados de um anúncio individual da OLX
-    """
-    soup = BeautifulSoup(html_content, 'html.parser')
-    logging.info("Analisando página de anúncio individual...")
-    
-    # Dicionário para armazenar os dados extraídos
-    ad_data = {}
-    
-    try:
-        # Título do anúncio
-        title_element = (
-            soup.select_one('h1[data-ds-component="DS-Text-title"]') or
-            soup.select_one('h1.sc-45jt43-0') or
-            soup.select_one('h1')
-        )
-        ad_data['title'] = title_element.text.strip() if title_element else "Título não encontrado"
-        
-        # Preço
-        price_element = (
-            soup.select_one('span[data-ds-component="DS-Text-price"]') or
-            soup.select_one('h2.sc-1wimjbb-0') or
-            soup.select_one('span.ad__sc-1wimjbb-1')
-        )
-        ad_data['price'] = price_element.text.strip() if price_element else "Preço não encontrado"
-        
-        # Data de publicação
-        date_element = soup.select_one('span.sc-1oq8jzc-0, span[data-ds-component="DS-Text-subtitle"]')
-        ad_data['published_date'] = date_element.text.strip() if date_element else ""
-        
-        # Localização
-        location_element = soup.select_one('div.sc-18p038x-0, div[data-ds-component="DS-Text-subtitle"]')
-        ad_data['location'] = location_element.text.strip() if location_element else ""
-        
-        # Código do anúncio
-        code_element = soup.select_one('span.sc-5hxmq3-0, span[data-ds-component="DS-Text-regular"]')
-        ad_data['ad_code'] = code_element.text.replace('Código', '').strip() if code_element else ""
-        
-        # Imagens do anúncio
-        image_elements = soup.select('img[data-ds-component="DS-Image"], div.sc-1fcmfeb-0 img')
-        ad_data['images'] = [img.get('src') for img in image_elements if img.get('src') and not img.get('src').endswith('.svg')]
-        
-        # Atributos/detalhes do veículo (tabela de especificações)
-        details = {}
-        detail_elements = soup.select('div.sc-jfmDQi, div[data-ds-component="DS-AdDetails-item"]')
-        
-        for detail in detail_elements:
-            # Buscar o título e valor de cada detalhe
-            try:
-                label = detail.select_one('dt, span:first-child')
-                value = detail.select_one('dd, span:last-child')
-                
-                if label and value:
-                    label_text = label.text.strip().lower()
-                    value_text = value.text.strip()
-                    
-                    # Mapear para campos padronizados
-                    field_mapping = {
-                        'marca': 'brand',
-                        'modelo': 'model',
-                        'ano': 'year',
-                        'quilometragem': 'mileage',
-                        'câmbio': 'transmission',
-                        'combustível': 'fuel',
-                        'cor': 'color',
-                        'final de placa': 'plate_end',
-                        'portas': 'doors'
-                    }
-                    
-                    field_name = field_mapping.get(label_text, label_text)
-                    details[field_name] = value_text
-            except Exception as e:
-                logging.error(f"Erro ao extrair detalhe do veículo: {e}")
-        
-        ad_data['details'] = details
-        
-        # Descrição do anúncio
-        description_element = soup.select_one('div[data-ds-component="DS-AdDescription"], div.sc-bZQynM')
-        ad_data['description'] = description_element.text.strip() if description_element else ""
-        
-        logging.info(f"Anúncio analisado com sucesso: {ad_data['title']}")
-        return ad_data
-        
-    except Exception as e:
-        logging.error(f"Erro ao analisar anúncio: {e}")
-        return {"error": str(e), "partial_data": ad_data}
-
-
-def parse_olx_search_page(page_content):
-    """
-    Extrai dados da página de busca da OLX para apresentar resultados resumidos
-    """
-    logging.info("Analisando página de busca...")
-    soup = BeautifulSoup(page_content, 'html.parser')
-    
-    # Encontrar os cards de anúncios usando o seletor correto
-    items = soup.select('section[data-ds-component="DS-AdCard"], div[data-ds-component="DS-AdCard"]')
-    
-    logging.info(f"Encontrados {len(items)} anúncios usando seletor DS-AdCard")
-    
-    # Se não encontrar com o seletor principal, tentar alternativas
-    if not items:
-        selectors = [
-            'li[data-testid="listing-card"]',
-            'div[data-testid="ad-card"]',
-            'li.sc-1fcmfeb-2', 
-            'div.sc-1fcmfeb-1 > div'
-        ]
-        
-        for selector in selectors:
-            items = soup.select(selector)
-            if items:
-                logging.info(f"Encontrados {len(items)} anúncios usando seletor alternativo: {selector}")
-                break
-    
-    # Salvar estrutura para debug
-    with open("debug_search_structure.txt", "w", encoding="utf-8") as f:
-        f.write(f"Total de anúncios encontrados: {len(items)}\n\n")
-        
-        for i, item in enumerate(items[:5]):
-            f.write(f"Anúncio {i+1}:\n")
-            f.write(f"Classes: {item.get('class')}\n")
-            f.write(f"Data attributes: {[attr for attr in item.attrs if attr.startswith('data-')]}\n")
-            
-            links = item.select('a')
-            f.write(f"Links encontrados: {len(links)}\n")
-            for j, link in enumerate(links):
-                f.write(f"  Link {j+1}: {link.get('href')}\n")
-            
-            f.write(f"HTML parcial:\n{str(item)[:300]}...\n\n")
-    
-    parsed_items = []
-    for item in items:
-        try:
-            # Link do anúncio
-            link_element = item.select_one('a')
-            link = link_element.get('href') if link_element else ""
-            
-            if link and not link.startswith('http'):
-                link = f"https://www.olx.com.br{link}"
-            
-            # Título
-            title_element = (
-                item.select_one('h2') or 
-                item.select_one('span[data-ds-component="DS-Text-primary"]') or
-                item.select_one('*[class*="title"]')
-            )
-            title = title_element.text.strip() if title_element else "Título não encontrado"
-            
-            # Preço
-            price_element = (
-                item.select_one('span[data-testid="ad-price"]') or
-                item.select_one('span[data-ds-component="DS-Text-primary"][data-testid="ad-price"]') or
-                item.select_one('*[class*="price"]')
-            )
-            price = price_element.text.strip() if price_element else "Preço não encontrado"
-            
-            # Localização
-            location_element = (
-                item.select_one('*[data-testid="ad-location"]') or
-                item.select_one('span[data-ds-component="DS-Text-secondary"]') or
-                item.select_one('*[class*="location"]')
-            )
-            location = location_element.text.strip() if location_element else "Local não encontrado"
-            
-            # Imagem
-            img_element = item.select_one('img')
-            image_url = img_element.get('src') or img_element.get('data-src') if img_element else ""
-            
-            # Data de publicação
-            date_element = item.select_one('*[class*="date"], span[data-ds-component="DS-Text-secondary"]:last-child')
-            published_date = date_element.text.strip() if date_element else ""
-            
-            parsed_item = {
-                'title': title,
-                'price': price,
-                'link': link,
-                'location': location,
-                'image_url': image_url,
-                'published_date': published_date
-            }
-            
-            if link:  # Adicionar apenas se tiver um link válido
-                parsed_items.append(parsed_item)
-                logging.info(f"Item analisado: {title} - {price}")
-            
-        except Exception as e:
-            logging.error(f"Erro ao analisar item: {e}")
-            continue
-    
-    logging.info(f"Total de {len(parsed_items)} anúncios analisados com sucesso")
-    return parsed_items
 
 # Para executar o crawler
 if __name__ == "__main__":
