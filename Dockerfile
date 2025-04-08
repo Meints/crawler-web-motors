@@ -25,13 +25,14 @@ COPY main.py .
 COPY aleks/ ./aleks/
 COPY Thiago/ ./Thiago/
 COPY Cadu/ ./Cadu/
+COPY Pedro/ ./Pedro/
 COPY Emanuel/ ./Emanuel/
 
 # Instalar dependências
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Criar diretórios para dados
-RUN mkdir -p aleks/data aleks/data/html Thiago/data Cadu/data
+RUN mkdir -p aleks/data aleks/data/html Thiago/data Cadu/data Pedro/data
 
 # Comando para executar o main.py
 CMD ["python", "main.py"]
