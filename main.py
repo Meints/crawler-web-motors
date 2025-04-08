@@ -27,7 +27,7 @@ def run_crawler(crawler_name, crawler_path, max_pages=None, limit=None):
     Args:
         crawler_name: Nome do crawler (para logs)
         crawler_path: Caminho para o script Python do crawler
-        max_pages: Número máximo de páginas (Aleks e Thiago)
+        max_pages: Número máximo de páginas (Aleks, Thiago e Pedro)
         limit: Número máximo de modelos (Cadu)
     """
     logger.info(f"Iniciando crawler: {crawler_name}")
@@ -74,12 +74,12 @@ def run_crawler(crawler_name, crawler_path, max_pages=None, limit=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Executa os crawlers do projeto")
-    parser.add_argument("--crawler", choices=["aleks", "thiago", "cadu", "all"], default="all",
+    parser.add_argument("--crawler", choices=["aleks", "thiago", "cadu", "pedro", "all"], default="all",
                         help="Especifique qual crawler executar (default: all)")
     parser.add_argument("--sequential", action="store_true", 
                         help="Execute os crawlers sequencialmente em vez de paralelamente")
     parser.add_argument("--max-pages", type=int, default=10,
-                        help="Número máximo de páginas a serem processadas (Aleks e Thiago)")
+                        help="Número máximo de páginas a serem processadas (Aleks, Thiago e Pedro)")
     parser.add_argument("--limit", type=int, default=10,
                         help="Número máximo de modelos a processar (Cadu)")
     args = parser.parse_args()
@@ -88,7 +88,8 @@ def main():
     crawlers = {
         "aleks": "./aleks/crawler.py",
         "thiago": "./Thiago/crawler/WebMotors.py",
-        "cadu": "./Cadu/Icarros.py"
+        "cadu": "./Cadu/Icarros.py",
+        "pedro": "./Pedro/SemiNovos.py"
     }
     
     # Verificar se os arquivos existem
@@ -108,7 +109,7 @@ def main():
     if args.sequential:
         logger.info("Executando crawlers sequencialmente")
         for name, path in selected_crawlers:
-            max_pages_arg = args.max_pages if name in ["aleks", "thiago"] else None
+            max_pages_arg = args.max_pages if name in ["aleks", "thiago", "pedro"] else None
             limit_arg = args.limit if name == "cadu" else None
             exit_code = run_crawler(name, path, max_pages_arg, limit_arg)
             if exit_code != 0:
@@ -118,7 +119,7 @@ def main():
         with ThreadPoolExecutor(max_workers=len(selected_crawlers)) as executor:
             futures = []
             for name, path in selected_crawlers:
-                max_pages_arg = args.max_pages if name in ["aleks", "thiago"] else None
+                max_pages_arg = args.max_pages if name in ["aleks", "thiago", "pedro"] else None
                 limit_arg = args.limit if name == "cadu" else None
                 futures.append(
                     executor.submit(run_crawler, name, path, max_pages_arg, limit_arg)

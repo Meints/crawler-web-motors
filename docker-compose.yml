@@ -29,6 +29,15 @@ services:
       - LIMIT=10 # Variável para controlar o número de modelos (opcional)
     restart: on-failure
 
+  pedro-crawler:
+    build:
+      context: ./Pedro
+    volumes:
+      - ./Pedro/data:/app/data
+    environment:
+      - LIMIT=10 # Variável para controlar o número de modelos (opcional)
+    restart: on-failure
+
   # Serviço que executa todos os crawlers
   all-crawlers:
     build:
@@ -38,6 +47,7 @@ services:
       - ./aleks/data:/app/aleks/data
       - ./Thiago/data:/app/Thiago/data
       - ./Cadu/data:/app/Cadu/data
+      - ./Pedro/data:/app/Pedro/data
     environment:
       - MAX_PAGES=10
       - LIMIT=10
