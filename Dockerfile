@@ -32,7 +32,7 @@ COPY Emanuel/ ./Emanuel/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Criar diretórios para dados
-RUN mkdir -p aleks/data aleks/data/html Thiago/data Cadu/data Pedro/data
+RUN mkdir -p aleks/data aleks/data/html Thiago/data Cadu/data Pedro/data Emanuel/data
 
 # Comando para executar o main.py
 CMD ["python", "main.py"]
