@@ -1,0 +1,44 @@
+version: "3"
+
+services:
+  # Serviços individuais
+  aleks-crawler:
+    build:
+      context: ./aleks
+    volumes:
+      - ./aleks/data:/app/data
+    environment:
+      - MAX_PAGES=10 # Variável para controlar o número de páginas (opcional)
+    restart: on-failure
+
+  thiago-crawler:
+    build:
+      context: ./Thiago
+    volumes:
+      - ./Thiago/data:/app/data
+    environment:
+      - MAX_PAGES=10 # Variável para controlar o número de páginas (opcional)
+    restart: on-failure
+
+  cadu-crawler:
+    build:
+      context: ./Cadu
+    volumes:
+      - ./Cadu/data:/app/data
+    environment:
+      - LIMIT=10 # Variável para controlar o número de modelos (opcional)
+    restart: on-failure
+
+  # Serviço que executa todos os crawlers
+  all-crawlers:
+    build:
+      context: .
+      dockerfile: Dockerfile.all
+    volumes:
+      - ./aleks/data:/app/aleks/data
+      - ./Thiago/data:/app/Thiago/data
+      - ./Cadu/data:/app/Cadu/data
+    environment:
+      - MAX_PAGES=10
+      - LIMIT=10
+    restart: on-failure

@@ -1,33 +1,58 @@
-# Crawler WebMotors
+# USANDO DOCKER
 
-Um crawler para extrair dados de veículos do site WebMotors automaticamente.
+Este projeto pode ser facilmente executado usando Docker, sem necessidade de configurar ambientes Python locais.
 
-## 📋 Descrição
+## Pré-requisitos
+- Docker
+- Docker Compose
 
-Este projeto é um web crawler desenvolvido em Python para extrair informações de veículos anunciados no site WebMotors. Ele permite coletar dados como preço, modelo, ano, quilometragem e outras características dos veículos.
+## Executando os crawlers com Docker
 
-## 🔧 Pré-requisitos
-
-- Python 3.6+
-- pip (gerenciador de pacotes Python)
-- Google Chrome
-
-## 🚀 Instalação
-
-1. Clone o repositório:
 ```bash
+# 1. Clone o repositório
 git clone https://github.com/seu-usuario/crawler-web-motors.git
 cd crawler-web-motors
+
+# 2. Construa e execute os containers
+docker-compose build
+docker-compose up -d
+
+# 3. Para acompanhar os logs do crawler de Aleks
+docker-compose logs -f aleks-crawler
+
+# 4. Para acompanhar os logs do crawler de Thiago
+docker-compose logs -f thiago-crawler
+
+# 5. Para parar os containers
+docker-compose down
 ```
 
-2. Instale as dependências:
+# Instruções para uso unificado
+
+Além de poder executar cada crawler individualmente, você pode executar todos eles simultaneamente ou sequencialmente.
+
+## Execução manual (fora do Docker)
+
 ```bash
+# 1. Instalar todas as dependências
 pip install -r requirements.txt
-```
 
-## 📊 Como usar
+# 2. Executar todos os crawlers simultaneamente
+python main.py
 
-```python
-# Como executar o crawler
-python WebMotors.py
-```
+# 3. Executar todos os crawlers sequencialmente
+python main.py --sequential
+
+# 4. Executar apenas um crawler específico
+python main.py --crawler aleks
+python main.py --crawler thiago
+python main.py --crawler cadu
+
+# 5. Definir limites de coleta
+python main.py --max-pages 20 --limit 15
+
+# Executar todos os crawlers em um único container
+docker-compose up all-crawlers
+
+# OU executar cada crawler em seu próprio container
+docker-compose up
