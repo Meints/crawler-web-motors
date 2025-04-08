@@ -88,7 +88,9 @@ def main():
     crawlers = {
         "aleks": "./aleks/crawler.py",
         "thiago": "./Thiago/crawler/WebMotors.py",
-        "cadu": "./Cadu/Icarros.py"
+        "cadu": "./Cadu/Icarros.py",
+        "emanuel": "./Emanuel/crawler.py"
+        
     }
     
     # Verificar se os arquivos existem
