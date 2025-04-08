@@ -25,6 +25,7 @@ COPY main.py .
 COPY aleks/ ./aleks/
 COPY Thiago/ ./Thiago/
 COPY Cadu/ ./Cadu/
+COPY Emanuel/ ./Emanuel/
 
 # Instalar dependências
 RUN pip install --no-cache-dir -r requirements.txt
