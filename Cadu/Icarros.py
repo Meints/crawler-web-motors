@@ -1,15 +1,15 @@
 import requests
 from bs4 import BeautifulSoup
 import json
-from tqdm import tqdm
-import time
 import os
+import time
 import random
+from tqdm import tqdm
 
 BASE_URL = "https://www.icarros.com.br"
-JSON_PATH = "icarros_dados_completos.json"
+JSON_PATH = "data/icarros_dados_completos.json"
 
-# Requisição com retries e delay aleatório
+# Função para baixar uma página com tentativas e tempo aleatório
 def get_html(url, retries=5, wait_range=(2, 5)):
     for attempt in range(retries):
         try:
@@ -17,18 +17,18 @@ def get_html(url, retries=5, wait_range=(2, 5)):
             if response.status_code == 200:
                 return response.text
             elif response.status_code == 405:
-                print(f"⚠️ Erro 405 - Método não permitido em {url}")
+                print(f"⚠️ Erro 405 em {url}")
             else:
-                print(f"❌ Erro HTTP {response.status_code} para URL: {url}")
+                print(f"❌ Erro {response.status_code} para URL: {url}")
         except requests.exceptions.Timeout:
             print(f"⏰ Timeout na tentativa {attempt + 1} para {url}")
         except Exception as e:
-            print(f"⚠️ Tentativa {attempt + 1} falhou com erro: {e}")
+            print(f"⚠️ Erro na tentativa {attempt + 1}: {e}")
         time.sleep(random.uniform(*wait_range))
-    print(f"❌ Falha ao acessar a URL após {retries} tentativas: {url}")
+    print(f"❌ Falha ao acessar {url} após {retries} tentativas.")
     return None
 
-# Coleta os links dos modelos com paginação dinâmica
+# Coletar links dos modelos
 def coletar_links_modelos(limit=None):
     modelos = []
     pagina = 1
@@ -37,7 +37,6 @@ def coletar_links_modelos(limit=None):
         url = f"{BASE_URL}/catalogo/listaversoes.jsp?bid=2&app=18&sop=seg_0.1_-cur_t.1_&pas=1&lis=0&pag={pagina}&ord=4"
         html = get_html(url)
         if not html:
-            print(f"Erro ao acessar a página {pagina}")
             break
 
         soup = BeautifulSoup(html, "html.parser")
@@ -45,7 +44,6 @@ def coletar_links_modelos(limit=None):
         print(f"🔎 Página {pagina} - {len(cards)} modelos encontrados.")
 
         if not cards:
-            print("🚫 Nenhum card encontrado. Fim da paginação.")
             break
 
         for card in cards:
@@ -60,18 +58,16 @@ def coletar_links_modelos(limit=None):
 
     return modelos
 
-# Coleta versões e links da ficha técnica
+# Coletar ficha técnica por modelo
 def coletar_fichas_tecnicas_por_modelo(modelo_url):
     html = get_html(modelo_url)
     if not html:
-        print(f"❌ Erro ao acessar a página do modelo: {modelo_url}")
         return []
 
     soup = BeautifulSoup(html, "html.parser")
     versoes = soup.select("div.dropdown-checkbox__label a")
 
     if not versoes:
-        print(f"⚠️ Nenhuma versão encontrada para: {modelo_url}")
         return []
 
     links_ficha_tecnica = []
@@ -85,7 +81,7 @@ def coletar_fichas_tecnicas_por_modelo(modelo_url):
             })
     return links_ficha_tecnica
 
-# Interpreta ícones e textos nas células
+# Interpretar valores das células
 def interpretar_td(td):
     if 'badge-icon' in td.get("class", []):
         icon = td.find("i")
@@ -97,39 +93,49 @@ def interpretar_td(td):
         return "desconhecido"
     return td.get_text(strip=True)
 
-# Coleta tudo e salva como JSON
+# Salvar incrementalmente
+def salvar_incremental(dado_modelo):
+    with open(JSON_PATH, "r", encoding="utf-8") as f:
+        dados_existentes = json.load(f)
+
+    dados_existentes["dados"].append(dado_modelo)
+    dados_existentes["total_modelos"] = len(dados_existentes["dados"])
+    dados_existentes["paginas_acessadas"] += 1
+
+    with open(JSON_PATH, "w", encoding="utf-8") as f:
+        json.dump(dados_existentes, f, ensure_ascii=False, indent=4)
+
+    print(f"✅ Modelo {dado_modelo['modelo']} salvo.")
+
+# Coletar dados completos
 def coletar_dados_completos(limit=None):
     modelos_urls = coletar_links_modelos(limit)
-    dados_modelos = []
-    paginas_acessadas = 0
 
     for url in modelos_urls:
         print(f"\n📦 Coletando modelo: {url}")
         nome_modelo = url.split("/")[-1].capitalize()
         fichas = coletar_fichas_tecnicas_por_modelo(url)
-        paginas_acessadas += 1  # Página do modelo
 
         if not fichas:
-            print(f"🚫 Modelo {nome_modelo} não possui versões. Pulando...")
-            dados_modelos.append({
+            print(f"🚫 Modelo {nome_modelo} sem versões. Pulando...")
+            modelo_info = {
                 "modelo": nome_modelo,
                 "url_modelo": url,
                 "versoes": []
-            })
+            }
+            salvar_incremental(modelo_info)
             continue
 
         for versao in tqdm(fichas, desc=f"Versões de {nome_modelo}", leave=False):
             url_ficha = versao["ficha_tecnica_url"]
 
-            # Loop até obter a ficha técnica com sucesso
             while True:
                 html = get_html(url_ficha)
                 if html:
                     break
-                print(f"🔁 Repetindo tentativa para {url_ficha}")
+                print(f"🔁 Tentando novamente {url_ficha}")
                 time.sleep(random.uniform(2, 4))
 
-            paginas_acessadas += 1
             soup = BeautifulSoup(html, "html.parser")
             titulos = soup.find_all("p", class_="subtitle__onLight")
             tabelas = soup.find_all("table", class_="table table-bordered bg-white")
@@ -158,28 +164,31 @@ def coletar_dados_completos(limit=None):
             versao["ficha_tecnica"] = secoes
             time.sleep(random.uniform(0.5, 1.5))
 
-        dados_modelos.append({
+        modelo_info = {
             "modelo": nome_modelo,
             "url_modelo": url,
             "versoes": fichas
-        })
-        time.sleep(random.uniform(1, 2))
+        }
 
-    return {
-        "fonte": "icarros.com.br",
-        "total_modelos": len(dados_modelos),
-        "paginas_acessadas": paginas_acessadas,
-        "dados": dados_modelos
-    }
+        salvar_incremental(modelo_info)
+        time.sleep(random.uniform(1, 2))
 
 # Execução principal
 if __name__ == "__main__":
     print("🔁 Iniciando coleta de dados do iCarros...")
-    dados_finais = coletar_dados_completos(limit=None)  # Use limit=5 para testes mais rápidos
+    if not os.path.exists("data"):
+        os.makedirs("data")
 
+    # 🔥 Sempre sobrescreve o JSON antes de começar
+    dados_iniciais = {
+        "fonte": "icarros.com.br",
+        "total_modelos": 0,
+        "paginas_acessadas": 0,
+        "dados": []
+    }
     with open(JSON_PATH, "w", encoding="utf-8") as f:
-        json.dump(dados_finais, f, ensure_ascii=False, indent=4)
+        json.dump(dados_iniciais, f, ensure_ascii=False, indent=4)
+    print(f"🧹 Arquivo {JSON_PATH} resetado.")
 
+    coletar_dados_completos(limit=4)  # ajuste o limit conforme necessário
     print(f"✅ Coleta finalizada. Arquivo salvo em: {JSON_PATH}")
-    print(f"📄 Total de modelos: {dados_finais['total_modelos']}")
-    print(f"🔎 Páginas acessadas: {dados_finais['paginas_acessadas']}")
