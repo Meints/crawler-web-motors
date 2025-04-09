@@ -31,6 +31,7 @@ COPY aleks/ ./aleks/
 COPY Thiago/ ./Thiago/
 COPY Cadu/ ./Cadu/
 COPY Pedro/ ./Pedro/
+COPY Emanuel/ ./Emanuel/
 
 # Dar permissão de execução ao script
 RUN chmod +x run_all_crawlers.sh

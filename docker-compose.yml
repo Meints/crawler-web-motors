@@ -43,6 +43,13 @@ services:
       - LIMIT=10 # Variável para controlar o número de modelos
     restart: on-failure
 
+  emanuel-crawler:
+    build:
+      context: ./Emanuel
+    volumes:
+      - ./Emanuel/data:/app/data
+    restart: on-failure
+
   # Serviço que executa todos os crawlers
   all-crawlers:
     build:
