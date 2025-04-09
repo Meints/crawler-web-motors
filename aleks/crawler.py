@@ -26,10 +26,43 @@ logging.basicConfig(
 
 class OlxCrawler:
     def __init__(self):
-        self.base_url = "https://www.olx.com.br/autos-e-pecas/carros-vans-e-utilitarios/estado-rj"
-        self.data_dir = "data"
+        self.estados = {
+            'ac': 'Acre',
+            'al': 'Alagoas',
+            'ap': 'Amapá',
+            'am': 'Amazonas',
+            'ba': 'Bahia',
+            'ce': 'Ceará',
+            'df': 'Distrito Federal',
+            'es': 'Espírito Santo',
+            'go': 'Goiás',
+            'ma': 'Maranhão',
+            'mt': 'Mato Grosso',
+            'ms': 'Mato Grosso do Sul',
+            'mg': 'Minas Gerais',
+            'pa': 'Pará',
+            'pb': 'Paraíba',
+            'pr': 'Paraná',
+            'pe': 'Pernambuco',
+            'pi': 'Piauí',
+            'rj': 'Rio de Janeiro',
+            'rn': 'Rio Grande do Norte',
+            'rs': 'Rio Grande do Sul',
+            'ro': 'Rondônia',
+            'rr': 'Roraima',
+            'sc': 'Santa Catarina',
+            'sp': 'São Paulo',
+            'se': 'Sergipe',
+            'to': 'Tocantins'
+        }
+        self.base_url_template = "https://www.olx.com.br/autos-e-pecas/carros-vans-e-utilitarios/estado-{estado}"
+        self.current_estado = None
+        
+        self.script_dir = os.path.dirname(os.path.abspath(__file__))
+        self.data_dir = os.path.join(self.script_dir, "data")
         self.html_dir = os.path.join(self.data_dir, "html")
         self.json_file = os.path.join(self.data_dir, "anuncios.json")
+        
         self.processed_ads = set()  
         self.collected_data = []  
         
@@ -231,100 +264,179 @@ class OlxCrawler:
         ad_data = {
             "id": ad_id,
             "url": ad_url,
-            "data_extracao": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "data_extracao": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "estado": self.estados.get(self.current_estado, self.current_estado)
         }
         
         try:
+            logging.info(f"Iniciando extração de dados para anúncio {ad_id}")
+            
+            # Nova estrutura do site da OLX - extração do título/modelo
+            title_element = soup.select_one('h1.olx-text--title-large, h1.olx-text--title-xlarge, h1.olx-ad-title, span[data-testid="ad-title"]')
+            if title_element:
+                modelo = title_element.text.strip()
+                ad_data['modelo'] = modelo
+                logging.info(f"Modelo encontrado no título: {modelo}")
+            
+            # Extração dos detalhes do anúncio da seção 'details'
             details_section = soup.select_one('div#details')
+            detail_containers = []
+            
             if details_section:
-                logging.info("Seção de detalhes encontrada")
+                logging.info("Seção de detalhes encontrada pelo ID")
+                detail_containers = details_section.select('div.ad__sc-2h9gkk-0.dLQbjb')
+            
+            if not detail_containers:
+                # Tentar seletores alternativos
+                logging.info("Tentando seletores alternativos para os detalhes")
+                detail_elements = soup.select('div[data-ds-component="DS-AdDetails"] div[data-testid="ad-properties-item"]')
+                if not detail_elements:
+                    detail_elements = soup.select('div[data-testid="ad-properties"] div[data-testid="ad-properties-item"], div[data-testid="properties-card"] div[data-testid="ad-properties-item"]')
+            else:
+                logging.info(f"Encontrados {len(detail_containers)} containers de detalhes do anúncio")
+                # Processar os containers de detalhes
+                for container in detail_containers:
+                    try:
+                        # Pegar o label para saber qual detalhe está sendo extraído
+                        label_element = container.select_one('span[data-variant="overline"]')
+                        if not label_element:
+                            continue
+                            
+                        label_text = label_element.text.strip().lower()
+                        logging.info(f"Processando detalhe: {label_text}")
+                        
+                        # Pegar o valor do detalhe (pode ser em um 'a' ou 'span')
+                        value_element = container.select_one('a.olx-link, span.ekhFnR, span:not([data-variant])')
+                        if not value_element:
+                            continue
+                            
+                        value_text = value_element.text.strip()
+                        
+                        # Mapear os diferentes tipos de detalhes
+                        if 'marca' in label_text:
+                            ad_data['marca'] = value_text
+                            logging.info(f"Marca encontrada: {value_text}")
+                        elif 'modelo' in label_text:
+                            if not ad_data.get('modelo'):
+                                ad_data['modelo'] = value_text
+                                logging.info(f"Modelo encontrado nos detalhes: {value_text}")
+                        elif 'tipo de veículo' in label_text:
+                            ad_data['tipo_veiculo'] = value_text
+                            logging.info(f"Tipo de veículo: {value_text}")
+                        elif 'ano' in label_text:
+                            ad_data['ano'] = value_text
+                            logging.info(f"Ano: {value_text}")
+                        elif 'quilometragem' in label_text:
+                            ad_data['quilometragem'] = value_text
+                            logging.info(f"Quilometragem: {value_text}")
+                        elif 'potência do motor' in label_text:
+                            ad_data['potencia'] = value_text
+                            logging.info(f"Potência do motor: {value_text}")
+                        elif 'combustível' in label_text:
+                            ad_data['combustivel'] = value_text
+                            logging.info(f"Combustível: {value_text}")
+                        elif 'câmbio' in label_text:
+                            ad_data['cambio'] = value_text
+                            logging.info(f"Câmbio: {value_text}")
+                        elif 'direção' in label_text or 'tipo de direção' in label_text:
+                            ad_data['direcao'] = value_text
+                            logging.info(f"Direção: {value_text}")
+                        elif 'cor' in label_text:
+                            ad_data['cor'] = value_text
+                            logging.info(f"Cor: {value_text}")
+                        elif 'portas' in label_text:
+                            ad_data['portas'] = value_text
+                            logging.info(f"Portas: {value_text}")
+                        elif 'final de placa' in label_text:
+                            ad_data['final_placa'] = value_text
+                            logging.info(f"Final de placa: {value_text}")
+                        elif 'gnv' in label_text:
+                            ad_data['gnv'] = value_text
+                            logging.info(f"Possui GNV: {value_text}")
+                        elif 'categoria' in label_text:
+                            ad_data['categoria'] = value_text
+                            logging.info(f"Categoria: {value_text}")
+                    except Exception as detail_error:
+                        logging.error(f"Erro ao extrair detalhe: {detail_error}")
+                        
+            # Se não encontrou detalhes na seção específica, tentar métodos alternativos
+            if not any(key in ad_data for key in ['marca', 'combustivel', 'ano', 'quilometragem']):
+                logging.warning("Detalhes não encontrados na seção principal, tentando métodos alternativos")
                 
-                marca_container = details_section.find(lambda tag: tag.name == 'span' and 'Marca' in tag.text)
-                if marca_container and marca_container.find_next_sibling():
-                    marca_element = marca_container.find_parent('div').find('a', class_='olx-link')
-                    if marca_element:
-                        ad_data['marca'] = marca_element.text.strip()
-                        logging.info(f"Marca encontrada: {ad_data['marca']}")
-                    else:
-                        marca_span = marca_container.find_parent('div').find('span', class_='ekhFnR')
-                        if marca_span:
-                            ad_data['marca'] = marca_span.text.strip()
-                            logging.info(f"Marca encontrada (span): {ad_data['marca']}")
-                        else:
-                            ad_data['marca'] = "Marca não encontrada"
-                            logging.warning("Marca não encontrada nos elementos esperados")
+                # Tentar encontrar detalhes em outros formatos
+                if detail_elements:
+                    logging.info(f"Encontrados {len(detail_elements)} elementos de detalhes alternativos")
+                    for detail in detail_elements:
+                        try:
+                            label = detail.select_one('span.olx-text--caption')
+                            value = detail.select_one('span.olx-text--body-large, span.olx-text--body, span:not(.olx-text--caption), a')
+                            
+                            if label and value:
+                                label_text = label.text.strip().lower()
+                                value_text = value.text.strip()
+                                
+                                if 'marca' in label_text:
+                                    ad_data['marca'] = value_text
+                                elif 'modelo' in label_text and not ad_data.get('modelo'):
+                                    ad_data['modelo'] = value_text
+                                # Adicionar outros mapeamentos conforme necessário
+                        except Exception as e:
+                            logging.error(f"Erro ao extrair detalhe alternativo: {e}")
+                
+                # Tentar encontrar marca/modelo em outras partes da página
+                breadcrumb = soup.select('ol[data-testid="breadcrumb"] li a')
+                if breadcrumb and len(breadcrumb) >= 3:
+                    possible_brand = breadcrumb[2].text.strip()
+                    ad_data['marca'] = possible_brand
+                    logging.info(f"Marca extraída do breadcrumb: {possible_brand}")
+
+            # Se ainda não tiver marca, tentar extrair do título
+            if not ad_data.get('marca') and ad_data.get('modelo'):
+                primeira_palavra = ad_data['modelo'].split()[0]
+                marcas_comuns = ['honda', 'toyota', 'volkswagen', 'vw', 'fiat', 'chevrolet', 'ford', 'hyundai', 'nissan', 'renault']
+                if primeira_palavra.lower() in marcas_comuns:
+                    ad_data['marca'] = primeira_palavra
+                    logging.info(f"Marca extraída do título: {primeira_palavra}")
                 else:
                     ad_data['marca'] = "Marca não encontrada"
-                    logging.warning("Container de marca não encontrado")
-                
-                modelo_container = details_section.find(lambda tag: tag.name == 'span' and 'Modelo' in tag.text)
-                if modelo_container and modelo_container.find_next_sibling():
-                    modelo_element = modelo_container.find_parent('div').find('a', class_='olx-link')
-                    if modelo_element:
-                        ad_data['modelo'] = modelo_element.text.strip()
-                        logging.info(f"Modelo encontrado: {ad_data['modelo']}")
-                    else:
-                        modelo_span = modelo_container.find_parent('div').find('span', class_='ekhFnR')
-                        if modelo_span:
-                            ad_data['modelo'] = modelo_span.text.strip()
-                            logging.info(f"Modelo encontrado (span): {ad_data['modelo']}")
-                        else:
-                            ad_data['modelo'] = "Modelo não encontrado"
-                            logging.warning("Modelo não encontrado nos elementos esperados")
-                else:
-                    ad_data['modelo'] = "Modelo não encontrado"
-                    logging.warning("Container de modelo não encontrado")
-                    
-                if ad_data.get('modelo') == "Modelo não encontrado":
-                    main_title = soup.select_one('h1.ad__sc-45jt43-0')
-                    if main_title:
-                        ad_data['modelo'] = main_title.text.strip()
-                        logging.info(f"Modelo extraído do título principal: {ad_data['modelo']}")
-            else:
-                logging.warning("Seção de detalhes não encontrada, tentando métodos alternativos")
-                description = soup.select_one('div[data-section="description"] span.olx-text--body-medium')
-                if description:
-                    desc_text = description.text.strip()
-                    first_line = desc_text.split('\n')[0]
-                    ad_data['modelo'] = first_line
-                    logging.info(f"Modelo extraído da descrição: {ad_data['modelo']}")
-                else:
-                    ad_data['modelo'] = "Modelo não encontrado"
-                    logging.warning("Não foi possível encontrar o modelo do veículo")
-
+            
+            # Nova estrutura para extrair preço
             try:
                 logging.info("Extraindo preço do anúncio...")
                 
-                price_container = soup.select_one('div#price-box-container')
-                if price_container:
-                    price_span = price_container.select_one('span.olx-text')
-                    if price_span:
+                # Primeiro tentar pela div específica do preço
+                price_box = soup.select_one('div#price-box-container')
+                if price_box:
+                    logging.info("Encontrado container de preço específico")
+                    # Procurar dentro do container específico do preço
+                    price_span = price_box.select_one('span.olx-text--title-large, span[class*="title-large"]')
+                    if price_span and 'R$' in price_span.text:
                         preco_valor = price_span.text.strip()
-                        logging.info(f"Preço encontrado no span dentro do container principal: {preco_valor}")
+                        logging.info(f"Preço encontrado no price-box-container: {preco_valor}")
                         ad_data['preco'] = preco_valor
                     else:
-                        price_text = re.search(r'R\$\s*[\d.,]+', price_container.text)
+                        # Se não encontrar o span específico, buscar qualquer texto que tenha R$ no container
+                        price_text = re.search(r'R\$\s*[\d.,]+', price_box.text)
                         if price_text:
                             preco_valor = price_text.group(0).strip()
-                            logging.info(f"Preço encontrado com regex no container principal: {preco_valor}")
+                            logging.info(f"Preço encontrado com regex no price-box-container: {preco_valor}")
                             ad_data['preco'] = preco_valor
-                        else:
-                            logging.warning("Preço não encontrado no container principal")
-                            ad_data['preco'] = "Preço não encontrado no container"
                 else:
-                    price_spans = soup.select('span.olx-text--title-medium')
-                    for span in price_spans:
-                        if 'R$' in span.text:
-                            preco_valor = span.text.strip()
-                            logging.info(f"Preço encontrado em span alternativo: {preco_valor}")
-                            ad_data['preco'] = preco_valor
-                            break
+                    # Tentar seletores alternativos se não encontrar o container específico
+                    price_element = soup.select_one('div[data-testid="ad-price-wrapper"] span, span[data-ds-component="DS-Text"][class*="olx-text--title"]')
+                    if price_element and 'R$' in price_element.text:
+                        preco_valor = price_element.text.strip()
+                        logging.info(f"Preço encontrado no elemento alternativo: {preco_valor}")
+                        ad_data['preco'] = preco_valor
                     else:
-                        price_element = soup.find(string=re.compile(r'R\$\s*[\d.,]+'))
-                        if price_element:
-                            preco_valor = price_element.strip()
-                            logging.info(f"Preço encontrado com regex: {preco_valor}")
-                            ad_data['preco'] = preco_valor
+                        # Último recurso: tentar encontrar qualquer elemento com R$
+                        price_regex = re.compile(r'R\$\s*[\d.,]+')
+                        for element in soup.find_all(['span', 'div', 'p']):
+                            if element.text and price_regex.search(element.text):
+                                preco_valor = price_regex.search(element.text).group(0).strip()
+                                logging.info(f"Preço encontrado com regex: {preco_valor}")
+                                ad_data['preco'] = preco_valor
+                                break
                         else:
                             logging.warning("Preço não encontrado no anúncio")
                             ad_data['preco'] = "Preço não encontrado"
@@ -379,9 +491,17 @@ class OlxCrawler:
         ad_links = []
         logging.info("Extraindo links de anúncios da página...")
     
+        # Nova estrutura do site da OLX - 2023/2024
         primary_selectors = [
-            'section[data-ds-component="DS-AdCard"] a', 
-            'div[data-ds-component="DS-AdCard"] a'
+            'a[data-testid="adcard-link"]',  # Novo seletor principal da OLX (2024)
+            'a.AdCard_link__4c7W6',  # Seletor de classe do card de anúncio
+            'a[href*="/autos-e-pecas/carros-vans-e-utilitarios/"][href*="-"]', # Links de anúncios específicos
+            'a[data-testid="ad-card-link"]',  # Outro seletor possível
+            'div[data-testid="listing-card"] a', # Seletor alternativo
+            'a[data-ds-component="DS-Link"][href*="/item"]', # Formato de link
+            'div[data-testid="ad-card"] a',  # Outro seletor
+            'section[data-ds-component="DS-AdCard"] a',  # Seletor antigo
+            'div[data-ds-component="DS-AdCard"] a'  # Seletor antigo
         ]
         
         for selector in primary_selectors:
@@ -391,17 +511,20 @@ class OlxCrawler:
                 for element in ad_elements:
                     href = element.get('href')
                     if href:
-                        full_url = urljoin(self.base_url, href)
+                        # Usamos urljoin com URL base da OLX em vez de self.base_url
+                        full_url = urljoin("https://www.olx.com.br", href)
                         ad_links.append(full_url)
-                break
+                if ad_links:  # Se encontrou links com este seletor, podemos prosseguir
+                    break
         
         if not ad_links:
             logging.info("Usando seletores alternativos para encontrar links...")
             fallback_selectors = [
-                'a[data-lurker-detail="list_id"]',
-                'div[data-testid="ad-card"] a',
-                'a[href*="/item/"]',
-                'li[data-testid="listing-card"] a'
+                'a[href*="/item/"]',  # Links de item genérico
+                'a[data-lurker-detail="list_id"]',  # Seletor antigo
+                'a[href*="olx.com.br/autos-e-pecas/carros"]',  # Links diretos para carros
+                'a.olx-ad-card__link-wrapper',  # Classe específica de cards
+                'a[href*="carros-vans-e-utilitarios/"]'  # Padrão de URL para carros
             ]
             
             for selector in fallback_selectors:
@@ -413,20 +536,33 @@ class OlxCrawler:
                         if href:
                             full_url = urljoin(self.base_url, href)
                             ad_links.append(full_url)
-                    break 
+                    if ad_links:  # Se encontrou links com este seletor, podemos prosseguir
+                        break
         
         if not ad_links:
-            logging.info("Último recurso: buscando links por padrões na URL...")
+            logging.info("Último recurso: buscando todos os links e filtrando por padrões relevantes...")
             all_links = soup.find_all('a', href=True)
             for link in all_links:
                 href = link['href']
-                if '/item/' in href or ('/autos-e-pecas/carros-vans-e-utilitarios/' in href and not href.endswith('carros-vans-e-utilitarios/')):
+                # Ampliando os padrões de URL para capturar mais anúncios
+                if (
+                    '/item/' in href or 
+                    ('/autos-e-pecas/carros-vans-e-utilitarios/' in href and not href.endswith('carros-vans-e-utilitarios/')) or
+                    ('/anuncio/' in href) or
+                    ('/d/' in href and 'carros' in href)
+                ):
                     full_url = urljoin(self.base_url, href)
                     ad_links.append(full_url)
         
         unique_links = []
         for url in ad_links:
-            is_valid = '/item/' in url or ('/autos-e-pecas/carros-vans-e-utilitarios/' in url and not url.endswith('carros-vans-e-utilitarios/'))
+            # Ampliando os critérios de validação
+            is_valid = (
+                '/item/' in url or 
+                '/anuncio/' in url or
+                ('/d/' in url and 'carros' in url) or
+                ('/autos-e-pecas/carros-vans-e-utilitarios/' in url and not url.endswith('carros-vans-e-utilitarios/'))
+            )
             if is_valid and url not in unique_links:
                 unique_links.append(url)
         
@@ -438,14 +574,16 @@ class OlxCrawler:
                 f.write(html_content)
                 
             with open("debug_page_structure.txt", "w", encoding="utf-8") as f:
-                possible_containers = soup.select('section, div[data-ds], div[data-testid], li')
+                possible_containers = soup.select('section, div[data-ds], div[data-testid], li, a[href*="/item/"], a[href*="olx.com.br/"]')
                 f.write(f"Possíveis contêineres: {len(possible_containers)}\n\n")
                 
-                for i, container in enumerate(possible_containers[:20]):
+                for i, container in enumerate(possible_containers[:30]):
                     f.write(f"Container {i+1}:\n")
                     f.write(f"Tag: {container.name}\n")
                     f.write(f"Classes: {container.get('class')}\n")
                     f.write(f"Data attrs: {[attr for attr in container.attrs if attr.startswith('data-')]}\n")
+                    if container.name == 'a':
+                        f.write(f"Href: {container.get('href')}\n")
                     f.write(f"Links: {len(container.select('a'))}\n\n")
         
         return unique_links
@@ -469,15 +607,22 @@ class OlxCrawler:
         next_page = current_page + 1
         return f"{self.base_url}?o={next_page}"
     
-    def crawl(self, max_pages=100):
+    def crawl_estado(self, estado, max_pages=100):
+        """
+        Executa o crawler para um estado específico
+        """
+        self.current_estado = estado
+        base_url = self.base_url_template.format(estado=estado)
         current_page = 1
-        current_url = self.base_url
+        current_url = base_url
         total_ads_processed = 0
         consecutive_errors = 0
         
+        logging.info(f"Iniciando crawler para o estado: {self.estados.get(estado, estado)}")
+        
         try:
             while current_page <= max_pages:
-                logging.info(f"Processando página {current_page}: {current_url}")
+                logging.info(f"Processando página {current_page} de {self.estados.get(estado, estado)}: {current_url}")
                 
                 response = self.make_request(current_url)
                 if not response:
@@ -499,7 +644,7 @@ class OlxCrawler:
                         
                         # Em caso de muitos erros, tentar URL alternativa
                         if current_page > 1:
-                            current_url = f"{self.base_url}?o={current_page}"
+                            current_url = f"{base_url}?o={current_page}"
                         
                         consecutive_errors = 0
                         continue
@@ -510,20 +655,20 @@ class OlxCrawler:
                 consecutive_errors = 0  # Reinicia contador de erros após sucesso
                 
                 ad_links = self.extract_ad_links(response.text)
-                logging.info(f"Encontrados {len(ad_links)} anúncios na página {current_page}")
+                logging.info(f"Encontrados {len(ad_links)} anúncios na página {current_page} de {self.estados.get(estado, estado)}")
                 
                 if not ad_links:
                     logging.warning(f"Nenhum anúncio encontrado na página {current_page}. Salvando para análise.")
                     
-                    with open(f"debug_page_{current_page}.html", "w", encoding="utf-8") as f:
+                    with open(f"debug_page_{estado}_{current_page}.html", "w", encoding="utf-8") as f:
                         f.write(response.text)
                     
                     current_page += 1
-                    current_url = f"{self.base_url}?o={current_page}"
+                    current_url = f"{base_url}?o={current_page}"
                     time.sleep(random.uniform(60, 120))  # Espera maior antes de tentar a próxima
                     continue
                 
-                for ad_url in tqdm(ad_links, desc=f"Página {current_page}"):
+                for ad_url in tqdm(ad_links, desc=f"{self.estados.get(estado, estado)} - Página {current_page}"):
                     success = self.process_ad(ad_url)
                     if success:
                         total_ads_processed += 1
@@ -535,7 +680,7 @@ class OlxCrawler:
                 
                 next_url = self.extract_next_page(response.text, current_page)
                 if not next_url or next_url == current_url:
-                    logging.info("Nenhuma próxima página encontrada. Finalizando.")
+                    logging.info(f"Nenhuma próxima página encontrada para {self.estados.get(estado, estado)}. Finalizando.")
                     break
                 
                 current_url = next_url
@@ -546,6 +691,40 @@ class OlxCrawler:
                 time.sleep(wait_time)
                 
                 self.save_data()
+                
+        except KeyboardInterrupt:
+            logging.info("Interrompido pelo usuário.")
+            return total_ads_processed
+        except Exception as e:
+            logging.error(f"Erro durante o crawling do estado {self.estados.get(estado, estado)}: {e}", exc_info=True)
+            return total_ads_processed
+        
+        logging.info(f"Crawling do estado {self.estados.get(estado, estado)} finalizado. Total de anúncios processados: {total_ads_processed}")
+        return total_ads_processed
+
+    def crawl(self, estados=None, max_pages=100):
+        """
+        Executa o crawler para uma lista de estados
+        estados: lista de siglas de estados (ex: ['sp', 'rj'])
+        max_pages: número máximo de páginas por estado
+        """
+        if estados is None:
+            estados = ['sp']  # Por padrão, apenas São Paulo
+        
+        total_geral = 0
+        
+        try:
+            for estado in estados:
+                if estado.lower() in self.estados:
+                    ads_processados = self.crawl_estado(estado.lower(), max_pages)
+                    total_geral += ads_processados
+                    
+                    # Pausa entre estados para reduzir a chance de detecção
+                    wait_time = random.uniform(60, 180)
+                    logging.info(f"Concluído estado {self.estados.get(estado.lower())}. Aguardando {wait_time:.2f}s antes do próximo estado...")
+                    time.sleep(wait_time)
+                else:
+                    logging.warning(f"Estado {estado} não reconhecido. Ignorando.")
         
         except KeyboardInterrupt:
             logging.info("Interrompido pelo usuário.")
@@ -553,12 +732,15 @@ class OlxCrawler:
             logging.error(f"Erro durante o crawling: {e}", exc_info=True)
         finally:
             self.save_data()
-            logging.info(f"Crawling finalizado. Total de anúncios processados: {total_ads_processed}")
+            logging.info(f"Crawling de todos estados finalizado. Total de anúncios processados: {total_geral}")
 
 # Para executar o crawler
 if __name__ == "__main__":
     try:
         crawler = OlxCrawler()
-        crawler.crawl(max_pages=100                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           )
+        estados = ['sp', 'rj', 'mg', 'ba', 'sc']
+        crawler.crawl(estados=estados, max_pages=100)
+    except Exception as e:
+        logging.error(f"Erro ao executar crawler: {e}", exc_info=True)
     except Exception as e:
         logging.error(f"Erro ao executar crawler: {e}", exc_info=True)

@@ -1,3 +1,4 @@
+# Dependências centralizadas para todos os crawlers
 beautifulsoup4
 requests
 fake-useragent
@@ -5,6 +6,5 @@ tqdm
 lxml
 cloudscraper
 backoff
-
 undetected-chromedriver
 selenium

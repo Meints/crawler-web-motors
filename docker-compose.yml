@@ -4,29 +4,33 @@ services:
   # Serviços individuais
   aleks-crawler:
     build:
-      context: ./aleks
+      context: .
+      dockerfile: aleks/Dockerfile
     volumes:
       - ./aleks/data:/app/data
     environment:
-      - MAX_PAGES=10 # Variável para controlar o número de páginas (opcional)
+      - MAX_PAGES=10 # Variável para controlar o número de páginas
+      - ESTADOS=sp,rj,mg # Estados para processar (pode ser ajustado)
     restart: on-failure
 
   thiago-crawler:
     build:
-      context: ./Thiago
+      context: .
+      dockerfile: Thiago/Dockerfile
     volumes:
       - ./Thiago/data:/app/data
     environment:
-      - MAX_PAGES=10 # Variável para controlar o número de páginas (opcional)
+      - MAX_PAGES=10 # Variável para controlar o número de páginas
     restart: on-failure
 
   cadu-crawler:
     build:
-      context: ./Cadu
+      context: .
+      dockerfile: Cadu/Dockerfile
     volumes:
       - ./Cadu/data:/app/data
     environment:
-      - LIMIT=10 # Variável para controlar o número de modelos (opcional)
+      - LIMIT=10 # Variável para controlar o número de modelos
     restart: on-failure
 
   emanuel-crawler:
@@ -38,11 +42,12 @@ services:
 
   pedro-crawler:
     build:
-      context: ./Pedro
+      context: .
+      dockerfile: Pedro/Dockerfile
     volumes:
       - ./Pedro/data:/app/data
     environment:
-      - LIMIT=10 # Variável para controlar o número de modelos (opcional)
+      - LIMIT=10 # Variável para controlar o número de modelos
     restart: on-failure
 
   # Serviço que executa todos os crawlers
@@ -56,6 +61,8 @@ services:
       - ./Cadu/data:/app/Cadu/data
       - ./Pedro/data:/app/Pedro/data
     environment:
-      - MAX_PAGES=10
-      - LIMIT=10
+      - MAX_PAGES=20 # Número de páginas por crawler
+      - LIMIT=20 # Limite de modelos para crawlers
+      - ESTADOS=sp,rj,mg,ba,sc # Estados para o crawler do Aleks
+      - PARALLEL_EXECUTION=true # Define se os crawlers devem executar em paralelo
     restart: on-failure
