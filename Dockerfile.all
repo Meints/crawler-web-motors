@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     libxi6 \
     libgconf-2-4 \
     default-jdk \
+    bash \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar Chrome
@@ -24,11 +25,17 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar o código do crawler
-COPY Thiago/ .
+# Copiar os códigos dos crawlers
+COPY run_all_crawlers.sh .
+COPY aleks/ ./aleks/
+COPY Thiago/ ./Thiago/
+COPY Cadu/ ./Cadu/
+COPY Pedro/ ./Pedro/
 
-# Criar diretório de dados
-RUN mkdir -p data/html
+# Dar permissão de execução ao script
+RUN chmod +x run_all_crawlers.sh
 
-# Comando para executar o crawler
-CMD ["python", "crawler/WebMotors.py"]
+# Criar diretórios de dados caso não existam
+RUN mkdir -p aleks/data Thiago/data Cadu/data Pedro/data
+
+CMD ["./run_all_crawlers.sh"]

@@ -2,17 +2,15 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Copiar apenas o arquivo de requisitos primeiro para aproveitar o cache do Docker
+# Copiar requisitos e instalar dependências
 COPY requirements.txt .
-
-# Instalar dependências
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar o código do crawler
-COPY . .
+COPY aleks/ .
 
-# Criar diretório para dados
-RUN mkdir -p data/html
+# Criar diretório de dados
+RUN mkdir -p data
 
 # Comando para executar o crawler
 CMD ["python", "crawler.py"]

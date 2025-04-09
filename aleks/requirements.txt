@@ -1,7 +1,0 @@
-beautifulsoup4
-requests
-fake-useragent
-tqdm
-lxml
-cloudscraper
-backoff

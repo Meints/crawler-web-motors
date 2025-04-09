@@ -2,17 +2,15 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Copiar apenas o arquivo de requisitos primeiro
+# Copiar requisitos e instalar dependências
 COPY requirements.txt .
-
-# Instalar dependências
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar o código do crawler
-COPY . .
+COPY Pedro/ .
 
-# Criar diretório para dados
+# Criar diretório de dados
 RUN mkdir -p data
 
 # Comando para executar o crawler
-CMD ["python", "crawler.py"]
+CMD ["python", "SemiNovos.py"]
