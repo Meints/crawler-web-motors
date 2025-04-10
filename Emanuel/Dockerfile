@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
 ENV PATH="/usr/lib/chromium/:${PATH}"
 ENV CHROME_BIN="/usr/bin/chromium"
 ENV CHROMEDRIVER_PATH="/usr/lib/chromium/chromedriver"
+ENV PYTHONUNBUFFERED=1
 
 # Instalar dependências Python
 RUN pip install --no-cache-dir -r requirements.txt

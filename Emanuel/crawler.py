@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 import json
 import time
 
-def coletar_carros_localiza(max_scrolls=500, arquivo_saida="carros_localiza_completo.json"):
+def coletar_carros_localiza(max_scrolls=500, arquivo_saida="data/carros_localiza_completo.json"):
     # Configurações do Selenium
     options = Options()
     options.add_argument("--headless")
@@ -108,3 +108,11 @@ def coletar_carros_localiza(max_scrolls=500, arquivo_saida="carros_localiza_comp
 
     print(f"✅ Captura finalizada com {len(carros)} carros exportados para {arquivo_saida}.")
     return carros
+
+if __name__ == "__main__":
+    try:
+        print("Iniciando coleta de dados da Localiza Seminovos...")
+        coletar_carros_localiza(max_scrolls=100)
+        print("Coleta finalizada com sucesso!")
+    except Exception as e:
+        print(f"Erro durante a execução do crawler: {e}")
