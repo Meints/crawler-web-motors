@@ -75,9 +75,8 @@ def main():
     time.sleep(7)
 
     soup, carros = carregar_todos_os_anuncios(driver, max_clicks=550)
-    #Voce pode tbm limitar o numero de clicks em carregar anuncios para nao esperar todos os clicks
-    #carros = carros[:20]  # 👈 Caso queira , descomente e limite para poucos carros
-
+    # Você também pode limitar o número de cliques ao carregar anúncios para não esperar todos os cliques.
+    # carros = carros[:20]  # 👈 Caso queira, descomente e limite para poucos carros.
     # 🔍 Carregar JSON existente, se houver
     json_path = "data/carros_seminovos_com_detalhes.json"
     resultados = []
