@@ -1,5 +1,6 @@
 import time
 import json
+import os
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -7,7 +8,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 
-def carregar_todos_os_anuncios(driver, delay=5, max_clicks=500):
+def carregar_todos_os_anuncios(driver, delay=5, max_clicks=550):  
     clicks = 0
     while clicks < max_clicks:
         try:
@@ -73,9 +74,22 @@ def main():
     driver.get(url)
     time.sleep(7)
 
-    soup, carros = carregar_todos_os_anuncios(driver)
+    soup, carros = carregar_todos_os_anuncios(driver, max_clicks=550)
+    #Voce pode tbm limitar o numero de clicks em carregar anuncios para nao esperar todos os clicks
+    #carros = carros[:20]  # 👈 Caso queira , descomente e limite para poucos carros
 
+    # 🔍 Carregar JSON existente, se houver
+    json_path = "data/carros_seminovos_com_detalhes.json"
     resultados = []
+    links_existentes = set()
+
+    if os.path.exists(json_path):
+        with open(json_path, "r", encoding="utf-8") as f:
+            try:
+                resultados = json.load(f)
+                links_existentes = set(carro["link"] for carro in resultados if "link" in carro)
+            except json.JSONDecodeError:
+                print("⚠️ Erro ao ler JSON existente. Será sobrescrito.")
 
     for idx, carro in enumerate(carros):
         content = carro.find("div", class_="content border-plano-nitro")
@@ -88,6 +102,12 @@ def main():
         header = content.find("div", class_="header")
         link_tag = header.find("a") if header else None
         link = f"https://seminovos.com.br{link_tag['href']}" if link_tag and link_tag.has_attr("href") else "N/A"
+
+        # ❌ Pular carro duplicado
+        if link in links_existentes:
+            print(f"⏩ Carro já existe no JSON: {link}")
+            continue
+
         titulo = header.find("div", class_="title").get_text(strip=True) if header else "N/A"
         descricao = header.find("div", class_="description").get_text(strip=True) if header else "N/A"
 
@@ -114,13 +134,15 @@ def main():
             carro_data["detalhes"] = {}
 
         resultados.append(carro_data)
+        links_existentes.add(link)
 
     driver.quit()
 
-    with open("carros_seminovos_com_detalhes.json", "w", encoding="utf-8") as f:
+    os.makedirs("data", exist_ok=True)
+    with open(json_path, "w", encoding="utf-8") as f:
         json.dump(resultados, f, indent=4, ensure_ascii=False)
 
-    print(f"\n✅ Dados de {len(resultados)} carros salvos em 'carros_seminovos_com_detalhes.json'")
+    print(f"\n✅ Dados de {len(resultados)} carros salvos em '{json_path}'")
 
 if __name__ == "__main__":
     main()
