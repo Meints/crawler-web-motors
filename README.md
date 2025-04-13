@@ -20,10 +20,7 @@ docker-compose up -d
 # 3. Para acompanhar os logs do crawler de Aleks
 docker-compose logs -f aleks-crawler
 
-# 4. Para acompanhar os logs do crawler de Thiago
-docker-compose logs -f thiago-crawler
-
-# 5. Para parar os containers
+# 4. Para parar os containers
 docker-compose down
 ```
 

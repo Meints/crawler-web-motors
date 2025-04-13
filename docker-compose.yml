@@ -11,16 +11,6 @@ services:
       - ESTADOS=sp,rj,mg # Estados para processar (pode ser ajustado)
     restart: on-failure
 
-  thiago-crawler:
-    build:
-      context: .
-      dockerfile: Thiago/Dockerfile
-    volumes:
-      - ./Thiago/data:/app/data
-    environment:
-      - MAX_PAGES=10 # Variável para controlar o número de páginas
-    restart: on-failure
-
   cadu-crawler:
     build:
       context: .
@@ -55,7 +45,6 @@ services:
       dockerfile: Dockerfile.all
     volumes:
       - ./aleks/data:/app/aleks/data
-      - ./Thiago/data:/app/Thiago/data
       - ./Cadu/data:/app/Cadu/data
       - ./Pedro/data:/app/Pedro/data
     environment:

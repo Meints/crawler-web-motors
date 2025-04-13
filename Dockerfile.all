@@ -28,7 +28,6 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key
 # Copiar os códigos dos crawlers
 COPY run_all_crawlers.sh .
 COPY aleks/ ./aleks/
-COPY Thiago/ ./Thiago/
 COPY Cadu/ ./Cadu/
 COPY Pedro/ ./Pedro/
 COPY Emanuel/ ./Emanuel/
@@ -37,6 +36,6 @@ COPY Emanuel/ ./Emanuel/
 RUN chmod +x run_all_crawlers.sh
 
 # Criar diretórios de dados caso não existam
-RUN mkdir -p aleks/data Thiago/data Cadu/data Pedro/data
+RUN mkdir -p aleks/data Cadu/data Pedro/data
 
 CMD ["./run_all_crawlers.sh"]
