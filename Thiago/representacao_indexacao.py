@@ -63,10 +63,10 @@ for marca in content["dados"]:
 inverted_index = {term: sorted(list(docs)) for term, docs in inverted_index.items()}
 
 # Salvando os resultados
-with open("indice_invertido.json", "w", encoding="utf-8") as f:
+with open("data/indice_invertido.json", "w", encoding="utf-8") as f:
     json.dump(inverted_index, f, ensure_ascii=False, indent=2)
 
-with open("metadados_documentos.json", "w", encoding="utf-8") as f:
+with open("data/metadados_documentos.json", "w", encoding="utf-8") as f:
     json.dump(doc_id_map, f, ensure_ascii=False, indent=2)
 
 print("Arquivos gerados com sucesso: indice_invertido_melhorado.json e metadados_documentos.json")
