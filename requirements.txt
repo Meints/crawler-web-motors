@@ -8,3 +8,5 @@ cloudscraper
 backoff
 undetected-chromedriver
 selenium
+nltk
+psutil
