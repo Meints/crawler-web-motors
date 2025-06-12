@@ -1,0 +1,9 @@
+{
+  "tempo_processamento_segundos": 6.58,
+  "uso_memoria_mb": 43.02,
+  "tamanho_indice_kb": 13196.88,
+  "granularidade": "campo",
+  "chunk": 100,
+  "total_termos_indice": 1387,
+  "total_anuncios": 13924
+}

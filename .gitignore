@@ -1,5 +1,3 @@
 venv
-data
 crawler.log
-*.json
 *.html
